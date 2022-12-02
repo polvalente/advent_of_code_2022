@@ -1,0 +1,56 @@
+# Day 1
+
+## Section
+
+```elixir
+test_input = """
+1000
+2000
+3000
+
+4000
+
+5000
+6000
+
+7000
+8000
+9000
+
+10000
+"""
+
+input = File.read!("./day1_input.txt")
+```
+
+```elixir
+defmodule Challenge do
+  def parse_input(input) do
+    input
+    |> String.split("\n\n", trim: true)
+    |> Enum.map(fn elf_str ->
+      elf_str
+      |> String.split("\n", trim: true)
+      |> Enum.map(&String.to_integer/1)
+    end)
+  end
+end
+```
+
+```elixir
+data_per_elf = Challenge.parse_input(input)
+```
+
+```elixir
+data_per_elf
+|> Enum.map(&Enum.sum/1)
+|> Enum.max()
+```
+
+```elixir
+data_per_elf
+|> Enum.map(&Enum.sum/1)
+|> Enum.sort(:desc)
+|> Enum.take(3)
+|> Enum.sum()
+```
