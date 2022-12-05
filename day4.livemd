@@ -10,6 +10,8 @@ Nx.default_backend(EXLA.Backend)
 
 ```elixir
 defmodule Day4 do
+  import Nx.Defn
+
   def part_1(input) do
     # Using Nx just for fun. Could be done with MapSet :p
     input
@@ -24,16 +26,18 @@ defmodule Day4 do
       {Nx.broadcast(0, {template_last_idx + 1}), Nx.tensor(Enum.to_list(e1_s..e1_e)),
        Nx.tensor(Enum.to_list(e2_s..e2_e))}
     end)
-    |> Enum.map(fn {target, idx1, idx2} ->
-      t1 = Nx.indexed_add(target, Nx.new_axis(idx1, 1), Nx.broadcast(1, idx1))
-      t2 = Nx.indexed_add(target, Nx.new_axis(idx2, 1), Nx.broadcast(1, idx2))
-
-      overlaps = Nx.logical_and(t1, t2)
-
-      Nx.all(Nx.equal(overlaps, t1)) |> Nx.logical_or(Nx.all(Nx.equal(overlaps, t2)))
-    end)
+    |> Enum.map(&calculate_full_overlap/1)
     |> Nx.stack()
     |> Nx.sum()
+  end
+
+  defn calculate_full_overlap({target, idx1, idx2}) do
+    t1 = Nx.indexed_add(target, Nx.new_axis(idx1, 1), Nx.broadcast(1, idx1))
+    t2 = Nx.indexed_add(target, Nx.new_axis(idx2, 1), Nx.broadcast(1, idx2))
+
+    overlaps = t1 and t2
+
+    Nx.all(overlaps == t1) or Nx.all(overlaps == t2)
   end
 
   def part_2(input) do

@@ -1,0 +1,101 @@
+# Day 5
+
+## Section
+
+```elixir
+defmodule Day5 do
+  def parse_input(input) do
+    [stacks, instructions] = String.split(input, "\n\n", parts: 2)
+
+    {parse_stacks(stacks), parse_instructions(instructions)}
+  end
+
+  defp parse_stacks(stacks) do
+    stacks
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line ->
+      line
+      |> String.graphemes()
+      |> Enum.chunk_every(4)
+      |> Enum.map(fn chunk -> chunk |> Enum.find(&Regex.match?(~r/[A-Z0-9]/, &1)) end)
+    end)
+    |> Enum.zip_with(& &1)
+    |> Enum.map(&(&1 |> Enum.filter(fn x -> x end) |> Enum.drop(-1)))
+    |> Enum.with_index()
+    |> Map.new(fn {v, k} -> {k, v} end)
+  end
+
+  defp parse_instructions(instructions) do
+    instructions
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn instruction ->
+      [_move, count, _from, from, _to, to] = String.split(instruction, " ", trim: true)
+      {String.to_integer(count), String.to_integer(from) - 1, String.to_integer(to) - 1}
+    end)
+  end
+
+  def part_1(input) do
+    {stacks, instructions} = parse_input(input)
+
+    moved_stacks =
+      Enum.reduce(instructions, stacks, fn {count, from, to}, stacks ->
+        from_data = stacks[from]
+        to_data = stacks[to]
+        {moved, from_data} = Enum.split(from_data, count)
+
+        stacks
+        |> Map.put(from, from_data)
+        |> Map.put(to, Enum.reverse(moved) ++ to_data)
+      end)
+
+    moved_stacks
+    |> Enum.map(fn {_, v} -> hd(v) || "" end)
+    |> Enum.join()
+  end
+
+  def part_2(input) do
+    {stacks, instructions} = parse_input(input)
+
+    moved_stacks =
+      Enum.reduce(instructions, stacks, fn {count, from, to}, stacks ->
+        from_data = stacks[from]
+        to_data = stacks[to]
+        {moved, from_data} = Enum.split(from_data, count)
+
+        stacks
+        |> Map.put(from, from_data)
+        |> Map.put(to, moved ++ to_data)
+      end)
+
+    moved_stacks
+    |> Enum.map(fn {_, v} -> hd(v) || "" end)
+    |> Enum.join()
+  end
+end
+```
+
+```elixir
+test_input = """
+    [D]    
+[N] [C]    
+[Z] [M] [P]
+ 1   2   3 
+
+move 1 from 2 to 1
+move 3 from 1 to 3
+move 2 from 2 to 1
+move 1 from 1 to 2
+"""
+```
+
+```elixir
+Day5.part_1(test_input)
+```
+
+```elixir
+Day5.part_1(File.read!("day5_input.txt"))
+```
+
+```elixir
+Day5.part_2(File.read!("day5_input.txt"))
+```
