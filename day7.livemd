@@ -1,0 +1,149 @@
+# Day 7
+
+## Section
+
+```elixir
+test_input = """
+$ cd /
+$ ls
+dir a
+14848514 b.txt
+8504156 c.dat
+dir d
+$ cd a
+$ ls
+dir e
+29116 f
+2557 g
+62596 h.lst
+$ cd e
+$ ls
+584 i
+$ cd ..
+$ cd ..
+$ cd d
+$ ls
+4060174 j
+8033020 d.log
+5626152 d.ext
+7214296 k
+"""
+```
+
+```elixir
+defmodule Day7 do
+  def parse(input) do
+    input
+    |> String.split(~r/\$\s*/, trim: true)
+    |> Enum.map(&String.trim/1)
+    |> Enum.map(fn
+      "cd " <> dir ->
+        {:cd, dir}
+
+      "ls" <> args ->
+        {:ls, parse_ls_result(String.split(args, "\n", trim: true))}
+    end)
+  end
+
+  defp parse_ls_result(result) do
+    parsed =
+      Enum.map(result, fn
+        "dir " <> dirname ->
+          {:dir, dirname}
+
+        filesize_and_name ->
+          [filesize, name] = String.split(filesize_and_name, " ", parts: 2)
+          {:file, %{size: String.to_integer(filesize), name: name}}
+      end)
+
+    parsed
+    |> Enum.group_by(&elem(&1, 0))
+    |> Map.new(fn {k, v} -> {k, Enum.map(v, &elem(&1, 1))} end)
+    |> Map.put_new(:file, [])
+    |> Map.put_new(:dir, [])
+  end
+
+  def to_abs_path(parsed) do
+    {mapped, _} =
+      Enum.map_reduce(parsed, [], fn
+        {:cd, ".."}, [_ | path] -> {nil, path}
+        {:cd, dir}, path -> {nil, [dir | path]}
+        {:ls, results}, path -> {{path, results}, path}
+      end)
+
+    mapped
+    |> Enum.filter(& &1)
+    |> Map.new(fn {path, results} ->
+      {path, %{dir: results[:dir], size: Enum.sum(get_in(results, [:file, Access.all(), :size]))}}
+    end)
+  end
+
+  def to_total_size(abs_path) do
+    for {path, current} <- abs_path, into: %{} do
+      {path, to_total_size(path, current, abs_path)}
+    end
+  end
+
+  defp to_total_size(_path, %{dir: nil, size: size}, _abs_path), do: size
+
+  defp to_total_size(path, %{dir: dirs, size: size}, abs_path) do
+    size +
+      Enum.sum(
+        for dir <- dirs do
+          dest_path = [dir | path]
+          to_total_size(dest_path, abs_path[dest_path], abs_path)
+        end
+      )
+  end
+
+  def parse_to_total_size(input) do
+    input
+    |> parse()
+    |> to_abs_path()
+    |> to_total_size()
+  end
+
+  def part_1(input) do
+    input
+    |> parse_to_total_size()
+    |> Enum.filter(fn {_dir, size} -> size <= 100_000 end)
+    |> Enum.map(fn {_, size} -> size end)
+    |> Enum.sum()
+  end
+
+  def part_2(input) do
+    total_disk = 70_000_000
+    needed_disk = 30_000_000
+
+    total_sizes = parse_to_total_size(input)
+
+    filled_disk = total_sizes[["/"]]
+    current_free = total_disk - filled_disk
+    to_free = needed_disk - current_free
+
+    total_sizes
+    |> Enum.sort_by(fn {_dir, size} -> size end, :asc)
+    |> Enum.find(fn {_dir, size} -> size >= to_free end)
+  end
+end
+```
+
+```elixir
+Day7.part_1(test_input)
+```
+
+```elixir
+"day7_input.txt"
+|> File.read!()
+|> Day7.part_1()
+```
+
+```elixir
+Day7.part_2(test_input)
+```
+
+```elixir
+"day7_input.txt"
+|> File.read!()
+|> Day7.part_2()
+```
