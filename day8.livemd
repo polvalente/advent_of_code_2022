@@ -1,0 +1,155 @@
+# Day 8
+
+```elixir
+Mix.install([:exla])
+Nx.default_backend(EXLA.Backend)
+```
+
+## Section
+
+```elixir
+test_input = """
+30373
+25512
+65332
+33549
+35390
+"""
+```
+
+```elixir
+defmodule Day8 do
+  def input_to_tensor(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(
+      &(&1
+        |> String.split("", trim: true)
+        |> Enum.map(fn x -> String.to_integer(x) end))
+    )
+    |> Nx.tensor()
+  end
+
+  def count_visible_trees_from_upwards(%Nx.Tensor{shape: {m, n}} = tensor) do
+    {_, mask} =
+      for i <- 0..(m - 1),
+          j <- 0..(n - 1),
+          reduce: {Nx.broadcast(-1, {n}), Nx.broadcast(0, {m, n})} do
+        {visible_height, visible_mask} ->
+          if Nx.greater(tensor[[i, j]], visible_height[[j]]) |> Nx.to_number() == 1 do
+            {
+              Nx.indexed_put(visible_height, Nx.tensor([[j]]), Nx.new_axis(tensor[[i, j]], 0)),
+              Nx.indexed_put(visible_mask, Nx.tensor([[i, j]]), Nx.tensor([1]))
+            }
+          else
+            {
+              visible_height,
+              visible_mask
+            }
+          end
+      end
+
+    mask
+  end
+
+  def count_visible(t) do
+    up = Day8.count_visible_trees_from_upwards(t)
+
+    down =
+      Day8.count_visible_trees_from_upwards(Nx.reverse(t, axes: [0])) |> Nx.reverse(axes: [0])
+
+    left = Day8.count_visible_trees_from_upwards(Nx.transpose(t)) |> Nx.transpose()
+
+    right =
+      Day8.count_visible_trees_from_upwards(Nx.transpose(t) |> Nx.reverse(axes: [0]))
+      |> Nx.reverse(axes: [0])
+      |> Nx.transpose()
+
+    up |> Nx.logical_or(right) |> Nx.logical_or(left) |> Nx.logical_or(down) |> Nx.sum()
+  end
+
+  def part_2(%Nx.Tensor{shape: {n, n}} = t) do
+    for i <- 0..(n - 1), j <- 0..(n - 1) do
+      k = t[[i, j]]
+
+      above = if i == 0, do: 0, else: Nx.reverse(t[[0..(i - 1)//1, j]])
+      below = if i == n - 1, do: 0, else: t[[(i + 1)..(n - 1)//1, j]]
+      right = if j == n - 1, do: 0, else: t[[i, (j + 1)..(n - 1)//1]]
+      left = if j == 0, do: 0, else: Nx.reverse(t[[i, 0..(j - 1)//1]])
+
+      a = if i == 0, do: 0, else: distance(1, above, k)
+      b = if i == n - 1, do: 0, else: distance(1, below, k)
+      c = if j == n - 1, do: 0, else: distance(1, right, k)
+      d = if j == 0, do: 0, else: distance(1, left, k)
+
+      a |> Nx.multiply(b) |> Nx.multiply(c) |> Nx.multiply(d)
+    end
+    |> Nx.stack()
+    |> Nx.reduce_max()
+  end
+
+  def distance(0, l, k), do: 0
+
+  def distance(prod, l, k) do
+    s = Nx.size(l)
+    k = Nx.to_number(k)
+
+    if s == 0 do
+      0
+    else
+      l = Nx.to_flat_list(l)
+      r = Enum.find_index(l, &(&1 >= k)) || s - 1
+      r + 1
+    end
+  end
+end
+```
+
+```elixir
+t = Day8.input_to_tensor(test_input)
+
+Day8.count_visible(t)
+```
+
+```elixir
+input = File.read!("day8_input.txt")
+t = Day8.input_to_tensor(input)
+```
+
+```elixir
+# Day8.count_visible(t)
+```
+
+```elixir
+t = Day8.input_to_tensor(test_input)
+IO.inspect(t)
+
+for i <- 0..4, j <- 0..4 do
+  k = t[[i, j]]
+
+  above = if i == 0, do: 0, else: Nx.reverse(t[[0..(i - 1)//1, j]])
+  below = if i == 4, do: 0, else: t[[(i + 1)..4//1, j]]
+  right = if j == 4, do: 0, else: t[[i, (j + 1)..4//1]]
+  left = if j == 0, do: 0, else: Nx.reverse(t[[i, 0..(j - 1)//1]])
+
+  # {above, below, right, left}
+
+  a = if i == 0, do: 0, else: Day8.distance(1, above, k)
+  b = if i == 4, do: 0, else: Day8.distance(1, below, k)
+  c = if j == 4, do: 0, else: Day8.distance(1, right, k)
+  d = if j == 0, do: 0, else: Day8.distance(1, left, k)
+
+  a |> Nx.multiply(b) |> Nx.multiply(c) |> Nx.multiply(d)
+end
+|> Nx.stack()
+```
+
+```elixir
+Day8.part_2(t)
+```
+
+```elixir
+input = File.read!("day8_input.txt")
+t = Day8.input_to_tensor(input) |> Nx.backend_transfer(Nx.BinaryBackend)
+Day8.part_2(t)
+```
