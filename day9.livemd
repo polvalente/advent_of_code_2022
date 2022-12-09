@@ -1,0 +1,122 @@
+# Untitled notebook
+
+## Section
+
+```elixir
+defmodule Day9 do
+  def parse_input(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.flat_map(fn
+      <<x::binary-1, " ", steps::binary>> ->
+        steps = String.to_integer(String.trim(steps))
+        List.duplicate(x, steps)
+    end)
+  end
+
+  def part_1(input) do
+    instructions = parse_input(input)
+
+    {_, _, history} =
+      for dir <- instructions, reduce: {{0, 0}, {0, 0}, [{0, 0}]} do
+        {hpos, {tx, ty} = tpos, history} ->
+          hpos_next = move_head(hpos, dir)
+          tpos = move_tail(hpos_next, tpos)
+          {hpos_next, tpos, [tpos | history]}
+      end
+
+    history
+    |> MapSet.new()
+    |> MapSet.size()
+  end
+
+  def part_2(input) do
+    instructions = parse_input(input)
+
+    {_, _, history} =
+      for dir <- instructions,
+          reduce: {{0, 0}, List.duplicate({0, 0}, 9), MapSet.new([{0, 0}])} do
+        {hpos, tpos, history} ->
+          hpos_next = move_head(hpos, dir)
+
+          {tpos, _} =
+            Enum.map_reduce(tpos, {hpos, hpos_next}, fn tpos_prev, {hpos, hpos_next} ->
+              tpos = move_tail(hpos_next, tpos_prev)
+              {tpos, {tpos_prev, tpos}}
+            end)
+
+          {hpos_next, tpos, MapSet.put(history, List.last(tpos))}
+      end
+
+    MapSet.size(history)
+  end
+
+  def move_head({hx, hy}, "U"), do: {hx + 1, hy}
+  def move_head({hx, hy}, "D"), do: {hx - 1, hy}
+  def move_head({hx, hy}, "R"), do: {hx, hy + 1}
+  def move_head({hx, hy}, "L"), do: {hx, hy - 1}
+
+  def move_tail({hx, hy} = hpos_next, {tx, ty} = tpos) do
+    head_too_far = :math.sqrt((hx - tx) ** 2 + (hy - ty) ** 2) >= 2
+
+    if head_too_far do
+      xinc = sign(hx - tx)
+      yinc = sign(hy - ty)
+
+      {tx + xinc, ty + yinc}
+    else
+      tpos
+    end
+  end
+
+  defp sign(x) when x > 0, do: 1
+  defp sign(x) when x == 0, do: 0
+  defp sign(x) when x < 0, do: -1
+end
+```
+
+```elixir
+test_input = """
+R 4
+U 4
+L 3
+D 1
+R 4
+D 1
+L 5
+R 2
+"""
+```
+
+```elixir
+Day9.part_1(test_input)
+```
+
+```elixir
+input = File.read!("day9_input.txt")
+```
+
+```elixir
+Day9.part_1(input)
+```
+
+```elixir
+test_input_part_2 = """
+R 5
+U 8
+L 8
+D 3
+R 17
+D 10
+L 25
+U 20
+"""
+```
+
+```elixir
+Day9.part_2(test_input_part_2)
+```
+
+```elixir
+Day9.part_2(input)
+```
