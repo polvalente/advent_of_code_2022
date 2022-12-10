@@ -1,0 +1,248 @@
+# Day 10
+
+```elixir
+Mix.install([:nx])
+```
+
+## Section
+
+```elixir
+defmodule Day10 do
+  @crt_w 40
+  @crt_h 6
+  @sprite_w 3
+
+  def parse(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.flat_map(fn
+      "addx " <> v ->
+        [:noop, {:addx, String.to_integer(v)}]
+
+      "noop" ->
+        [:noop]
+    end)
+  end
+
+  def signal_strengths_per_cycle(parsed) do
+    parsed
+    |> Enum.with_index(1)
+    |> Enum.map_reduce(1, fn
+      {:noop, cycle}, x -> {{cycle, signal_strength(cycle, x), x}, x}
+      {{:addx, v}, cycle}, x -> {{cycle, signal_strength(cycle, x), x + v}, x + v}
+    end)
+  end
+
+  def part_1(input) do
+    {map, _acc} = input |> parse() |> signal_strengths_per_cycle()
+
+    map
+    |> Enum.take(220)
+    |> Enum.filter(fn {cycle, _, _} -> cycle in 20..220//40 end)
+    |> Enum.map(fn {_, strength, _} -> strength end)
+    |> Enum.sum()
+  end
+
+  def part_2(input) do
+    {map, _acc} = input |> parse() |> signal_strengths_per_cycle()
+
+    map
+    |> Enum.map_reduce(1, fn {cycle, _, x}, prev_x -> {{cycle, prev_x}, x} end)
+    |> elem(0)
+    |> Enum.map(fn {cycle, x} ->
+      if rem(cycle - 1, @crt_w) in [x - 1, x, x + 1] do
+        0
+      else
+        1
+      end
+    end)
+    |> Nx.tensor()
+    |> Nx.reshape({@crt_h, @crt_w})
+  end
+
+  defp signal_strength(cycle, register), do: cycle * register
+end
+```
+
+```elixir
+test_input_1 = """
+noop
+addx 3
+addx -5
+"""
+```
+
+```elixir
+test_input_1 |> Day10.parse() |> Day10.signal_strengths_per_cycle()
+```
+
+```elixir
+test_input_2 = """
+addx 15
+addx -11
+addx 6
+addx -3
+addx 5
+addx -1
+addx -8
+addx 13
+addx 4
+noop
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx 5
+addx -1
+addx -35
+addx 1
+addx 24
+addx -19
+addx 1
+addx 16
+addx -11
+noop
+noop
+addx 21
+addx -15
+noop
+noop
+addx -3
+addx 9
+addx 1
+addx -3
+addx 8
+addx 1
+addx 5
+noop
+noop
+noop
+noop
+noop
+addx -36
+noop
+addx 1
+addx 7
+noop
+noop
+noop
+addx 2
+addx 6
+noop
+noop
+noop
+noop
+noop
+addx 1
+noop
+noop
+addx 7
+addx 1
+noop
+addx -13
+addx 13
+addx 7
+noop
+addx 1
+addx -33
+noop
+noop
+noop
+addx 2
+noop
+noop
+noop
+addx 8
+noop
+addx -1
+addx 2
+addx 1
+noop
+addx 17
+addx -9
+addx 1
+addx 1
+addx -3
+addx 11
+noop
+noop
+addx 1
+noop
+addx 1
+noop
+noop
+addx -13
+addx -19
+addx 1
+addx 3
+addx 26
+addx -30
+addx 12
+addx -1
+addx 3
+addx 1
+noop
+noop
+noop
+addx -9
+addx 18
+addx 1
+addx 2
+noop
+noop
+addx 9
+noop
+noop
+noop
+addx -1
+addx 2
+addx -37
+addx 1
+addx 3
+noop
+addx 15
+addx -21
+addx 22
+addx -6
+addx 1
+noop
+addx 2
+addx 1
+noop
+addx -10
+noop
+noop
+addx 20
+addx 1
+addx 2
+addx 2
+addx -6
+addx -11
+noop
+noop
+noop
+"""
+```
+
+```elixir
+Day10.part_1(test_input_2)
+```
+
+```elixir
+input = File.read!("day10_input.txt")
+```
+
+```elixir
+Day10.part_1(input)
+```
+
+```elixir
+Day10.part_2(test_input_2) |> IO.inspect(limit: :infinity)
+```
+
+```elixir
+Day10.part_2(input) |> Nx.to_heatmap()
+```
