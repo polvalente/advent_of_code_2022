@@ -1,0 +1,129 @@
+# Untitled notebook
+
+## Section
+
+```elixir
+defmodule Day12 do
+  def parse(input) do
+    data =
+      input
+      |> String.split("\n", trim: true)
+      |> Enum.with_index(fn line, row ->
+        line
+        |> String.graphemes()
+        |> Enum.with_index(fn
+          "S", col -> {{row, col}, "S"}
+          "E", col -> {{row, col}, "E"}
+          <<c::utf8>>, col -> {{row, col}, c - ?a}
+        end)
+      end)
+
+    h = length(data)
+    w = length(hd(data))
+
+    map =
+      data
+      |> List.flatten()
+      |> Map.new()
+
+    {start, _} = Enum.find(map, fn {_, v} -> v == "S" end)
+    {finish, _} = Enum.find(map, fn {_, v} -> v == "E" end)
+
+    map = map |> Map.put(start, 0) |> Map.put(finish, ?z - ?a)
+
+    %{start: start, finish: finish, h: h, w: w, map: map}
+  end
+
+  def build_graph(%{start: _start, finish: _finish, h: h, w: w, map: map} = data) do
+    g =
+      for {node, height} <- map,
+          target <- get_neighbor_edges(node, h - 1, w - 1),
+          map[target] - height <= 1,
+          reduce: :digraph.new() do
+        g ->
+          :digraph.add_vertex(g, node)
+          :digraph.add_vertex(g, target)
+          :digraph.add_edge(g, node, target)
+          g
+      end
+
+    Map.put(data, :g, g)
+  end
+
+  defp get_neighbor_edges({r, c}, max_r, max_c) do
+    edges = [
+      {r - 1, c},
+      {r + 1, c},
+      {r, c - 1},
+      {r, c + 1}
+    ]
+
+    Enum.filter(edges, fn {r, c} -> r in 0..max_r and c in 0..max_c end)
+  end
+
+  defp get_shortest_path(g, start, finish) do
+    path = :digraph.get_short_path(g, start, finish)
+
+    if path do
+      length(path) - 1
+    end
+  end
+
+  def part_1(input) do
+    %{start: start, finish: finish, g: g} =
+      input
+      |> parse()
+      |> build_graph()
+
+    get_shortest_path(g, start, finish)
+  end
+
+  def part_2(input) do
+    %{g: g, h: h, w: w, finish: finish, map: map} =
+      input
+      |> parse()
+      |> build_graph()
+
+    for {start, 0} <- Enum.filter(map, fn {_, v} -> v == 0 end), reduce: h * w do
+      min_path ->
+        path = get_shortest_path(g, start, finish)
+
+        if path do
+          min(min_path, path)
+        else
+          min_path
+        end
+    end
+  end
+end
+```
+
+```elixir
+test_input = """
+Sabqponm
+abcryxxl
+accszExk
+acctuvwj
+abdefghi
+"""
+```
+
+```elixir
+Day12.part_1(test_input)
+```
+
+```elixir
+input = File.read!("day12_input.txt")
+```
+
+```elixir
+Day12.part_1(input)
+```
+
+```elixir
+Day12.part_2(test_input)
+```
+
+```elixir
+Day12.part_2(input)
+```
