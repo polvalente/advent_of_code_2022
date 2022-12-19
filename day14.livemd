@@ -1,0 +1,243 @@
+# Day 14
+
+```elixir
+Mix.install([:nx])
+```
+
+## Section
+
+```elixir
+defmodule Day14 do
+  import Nx.Defn
+
+  def parse(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line ->
+      points =
+        line
+        |> String.split(" -> ", trim: true)
+        |> Enum.map(fn point ->
+          [x, y] = String.split(point, ",")
+          [String.to_integer(y), String.to_integer(x)]
+        end)
+
+      points
+      |> tl()
+      |> Enum.map_reduce(hd(points), fn
+        [x, y] = point, [x, prev_y] ->
+          {Enum.map(prev_y..y, &[x, &1]), point}
+
+        [x, y] = point, [prev_x, y] ->
+          {Enum.map(prev_x..x, &[&1, y]), point}
+      end)
+      |> elem(0)
+      |> List.flatten()
+      |> Enum.chunk_every(2)
+      |> Enum.uniq()
+      |> Nx.tensor()
+    end)
+  end
+
+  def set_walls(data, floor_offset \\ 0) do
+    limits =
+      data
+      |> Nx.concatenate(axis: 0)
+      |> Nx.reduce_max(axes: [0])
+
+    [max_n, _max_m] = Nx.to_flat_list(limits)
+    max_m = 800
+
+    field =
+      for %{shape: {n, 2}} = wall <- data,
+          reduce: Nx.broadcast(0, {max_n + 1 + floor_offset, max_m + 1}) do
+        field ->
+          Nx.indexed_put(field, wall, Nx.broadcast(1, {n}))
+      end
+
+    {field, max_n}
+  end
+
+  defn run_simulation_step(field, max_wall_x) do
+    true_t = Nx.tensor(1, type: :u8)
+
+    {field, _i, _j, _max_wall_x, _continue} =
+      while {field, i = 0, j = 500, max_wall_x, continue = true_t}, i < max_wall_x and continue do
+        f_ip = field[i + 1]
+        f_ip_j = f_ip[j]
+        f_ip_j_n = f_ip[j - 1]
+        f_ip_j_p = f_ip[j + 1]
+
+        if f_ip_j != 0 and f_ip_j_n != 0 and f_ip_j_p != 0 do
+          idx = [i, j] |> Nx.stack() |> Nx.reshape({1, 2})
+          field = Nx.indexed_put(field, idx, Nx.broadcast(2, {1}))
+          {field, i, j, max_wall_x, not continue}
+        else
+          if f_ip_j == 0 do
+            {field, i + 1, j, max_wall_x, continue}
+          else
+            if f_ip_j_n == 0 do
+              {field, i, j - 1, max_wall_x, continue}
+            else
+              {field, i, j + 1, max_wall_x, continue}
+            end
+          end
+        end
+      end
+
+    field
+  end
+
+  defn run_simulation({field, max_wall_x}) do
+    true_t = Nx.tensor(1, type: :u8)
+
+    {field, _, i, _} =
+      while {field, max_wall_x, i = 0, continue = true_t}, continue do
+        updated_field = run_simulation_step(field, max_wall_x)
+        continue = Nx.any(updated_field != field)
+
+        if continue do
+          {updated_field, max_wall_x, i + 1, continue}
+        else
+          {updated_field, max_wall_x, i, continue}
+        end
+      end
+
+    {field, i}
+  end
+
+  def part_1(input) do
+    input
+    |> parse()
+    |> set_walls()
+    |> run_simulation()
+  end
+
+  # def part_2(input) do
+  #   input
+  #   |> parse()
+  #   |> set_walls(2)
+  #   |> add_floor()
+  #   |> run_simulation()
+  # end
+
+  def parse_part_2(input) do
+    # returns wall vertices
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line ->
+      points =
+        line
+        |> String.split(" -> ", trim: true)
+        |> Enum.map(fn point ->
+          [x, y] = String.split(point, ",")
+          [String.to_integer(y), String.to_integer(x)]
+        end)
+
+      points
+      |> tl()
+      |> Enum.map_reduce(hd(points), fn
+        [x, y] = point, [x, prev_y] ->
+          {Enum.map(prev_y..y, &{x, &1}), point}
+
+        [x, y] = point, [prev_x, y] ->
+          {Enum.map(prev_x..x, &{&1, y}), point}
+      end)
+      # |> IO.inspect(label: line)
+      |> elem(0)
+      |> List.flatten()
+      |> MapSet.new()
+    end)
+    |> Enum.reduce(&MapSet.union/2)
+  end
+
+  def part_2(input) do
+    walls = parse_part_2(input)
+
+    walls
+    |> add_floor()
+    |> run_simulation_part_2()
+  end
+
+  def run_simulation_part_2(occupied, sand_dropped \\ 0) do
+    case simulation_step_part_2(occupied) do
+      {false, updated} ->
+        {sand_dropped + 1, updated}
+
+      {true, updated} ->
+        # updated |> print(0..11, 490..510)
+        run_simulation_part_2(updated, sand_dropped + 1)
+    end
+  end
+
+  def simulation_step_part_2(occupied, coord \\ {0, 500})
+
+  def simulation_step_part_2(occupied, {i, j} = coord) do
+    next_coord =
+      Enum.find([{i + 1, j}, {i + 1, j - 1}, {i + 1, j + 1}], fn coord ->
+        coord not in occupied
+      end)
+
+    if next_coord do
+      # found empty candidate cell, keep dropping
+      simulation_step_part_2(occupied, next_coord)
+    else
+      if coord == {0, 500} do
+        {false, MapSet.put(occupied, coord)}
+      else
+        {true, MapSet.put(occupied, coord)}
+      end
+    end
+  end
+
+  def add_floor(walls) do
+    {max_x, _} = Enum.max_by(walls, &elem(&1, 0))
+    Enum.reduce(0..1000, walls, &MapSet.put(&2, {max_x + 2, &1}))
+  end
+
+  def print(occupied, row_range, col_range) do
+    for x <- row_range do
+      for y <- col_range, into: "" do
+        if MapSet.member?(occupied, {x, y}) do
+          "o"
+        else
+          "."
+        end
+      end
+      |> IO.puts()
+    end
+
+    occupied
+  end
+end
+```
+
+```elixir
+test_input = """
+498,4 -> 498,6 -> 496,6
+503,4 -> 502,4 -> 502,9 -> 494,9
+"""
+```
+
+```elixir
+Day14.part_1(test_input)
+```
+
+```elixir
+input = File.read!("day14_input.txt")
+```
+
+```elixir
+# commented because this is slow (runs in 1m or 2m)!
+# BinaryBackend is faster for random-access than EXLA
+# Day14.part_1(input) 
+```
+
+```elixir
+test_input
+|> Day14.part_2()
+```
+
+```elixir
+Day14.part_2(input)
+```
