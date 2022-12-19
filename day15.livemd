@@ -1,0 +1,187 @@
+# Day 15
+
+```elixir
+Mix.install([:exla])
+
+Nx.default_backend(EXLA.Backend)
+```
+
+## Section
+
+```elixir
+n =
+  Nx.LinAlg.norm(Nx.subtract(Nx.tensor([8, 7]), Nx.tensor([2, 10])), ord: 1)
+  |> Nx.as_type(:s64)
+  |> Nx.to_number()
+
+candidates =
+  [
+    Nx.iota({2 * n + 1, 2 * n + 1}, axis: 0) |> Nx.subtract(n),
+    Nx.iota({2 * n + 1, 2 * n + 1}, axis: 1) |> Nx.subtract(n)
+  ]
+  |> Nx.stack(axis: 2)
+
+is_reachable =
+  candidates
+  |> Nx.abs()
+  |> Nx.sum(axes: [-1], keep_axes: true)
+  |> Nx.less_equal(n)
+
+Nx.indexed_put(
+  Nx.broadcast(0, {23, 26}),
+  Nx.add(candidates, Nx.tensor([8, 7])) |> Nx.reshape({:auto, 2}),
+  is_reachable |> Nx.flatten()
+)
+|> IO.inspect(limit: :infinity)
+```
+
+```elixir
+defmodule Day15 do
+  def parse(input) do
+    input
+    |> String.split("\n", trim: true)
+    |> Enum.map(fn line ->
+      match = Regex.scan(~r/(-?\d+)/, line, capture: :all_but_first)
+      [sx, sy, bx, by] = match |> List.flatten() |> Enum.map(&String.to_integer/1)
+
+      reach = manhattan_distance({sx, sy}, {bx, by})
+
+      {{sx, sy, reach}, {bx, by}}
+    end)
+    |> Enum.unzip()
+    |> then(fn {s, b} -> {Enum.uniq(s), Enum.uniq(b)} end)
+  end
+
+  defp manhattan_distance({x1, y1}, {x2, y2}), do: abs(x2 - x1) + abs(y2 - y1)
+
+  def empty_range({x, y, reach}, j) when reach - abs(y - j) >= 0 do
+    remaining_reach = reach - abs(y - j)
+
+    [(x - remaining_reach)..(x + remaining_reach)]
+  end
+
+  def empty_range(_, _), do: []
+
+  def merge_ranges(ranges, acc \\ [])
+
+  def merge_ranges([], acc), do: acc
+  def merge_ranges([r], acc), do: [r | acc]
+
+  def merge_ranges([r | t], acc) do
+    case Enum.split_with(t, &(not Range.disjoint?(&1, r))) do
+      {[], t} ->
+        # range is disjoint with all other remaining ranges
+        merge_ranges(t, [r | acc])
+
+      {[to_merge | t2], t} ->
+        # merged = Enum.reduce(to_merge, r, &merge/2)
+        merged = merge(to_merge, r)
+        # ranges can be merged
+        merge_ranges([merged | t2 ++ t], acc)
+    end
+  end
+
+  def merge(min_l..max_l, min_r..max_r) do
+    min(min_l, min_r)..max(max_l, max_r)
+  end
+
+  def part_1(input, row) do
+    {sensors, beacons} = parse(input)
+    empty_ranges = Enum.flat_map(sensors, &empty_range(&1, row))
+    empty_ranges = merge_ranges(empty_ranges)
+
+    beacons_in_row = beacons |> Enum.filter(fn {_, y} -> y == row end)
+    # sensors_in_row = sensors |> Enum.filter(fn {_, y, _} -> y == row end)
+
+    empty_ranges
+    |> Enum.map(fn r ->
+      size = Range.size(r)
+      count = Enum.count(beacons_in_row, fn {x, _} -> x in r end)
+      dbg({r, size, count})
+      size - count
+    end)
+    |> Enum.sum()
+  end
+
+  def part_2(input, search_space) do
+    {sensors, beacons} = parse(input)
+
+    Enum.reduce_while(0..search_space, nil, fn y, _acc ->
+      empty_ranges = Enum.flat_map(sensors, &empty_range(&1, y))
+      empty_ranges = merge_ranges(empty_ranges)
+
+      beacons_in_y = beacons |> Enum.filter(fn {x, _} -> x == y end)
+
+      empty_ranges
+      |> Enum.sort()
+      |> Enum.reject(fn r -> Range.disjoint?(r, 0..search_space) end)
+      |> gaps_in_ranges()
+      |> Enum.find(fn r ->
+        Range.size(r) == 1 and not Enum.any?(beacons_in_y, fn {_, y} -> y in r end)
+      end)
+      |> case do
+        nil ->
+          {:cont, nil}
+
+        x..x ->
+          {:halt, {x, y}}
+      end
+    end)
+    |> then(fn {x, y} -> x * 4_000_000 + y end)
+  end
+
+  def gaps_in_ranges(ranges) do
+    ranges
+    |> Enum.map_reduce(nil, fn
+      min_r.._ = r, nil ->
+        {0..(min_r - 1)//1, r}
+
+      min_r.._ = r, _..max_prev_r ->
+        {(max_prev_r + 1)..(min_r - 1)//1, r}
+    end)
+    |> elem(0)
+    |> Enum.reject(fn l..r -> l > r end)
+  end
+end
+```
+
+```elixir
+test_input = """
+Sensor at x=2, y=18: closest beacon is at x=-2, y=15
+Sensor at x=9, y=16: closest beacon is at x=10, y=16
+Sensor at x=13, y=2: closest beacon is at x=15, y=3
+Sensor at x=12, y=14: closest beacon is at x=10, y=16
+Sensor at x=10, y=20: closest beacon is at x=10, y=16
+Sensor at x=14, y=17: closest beacon is at x=10, y=16
+Sensor at x=8, y=7: closest beacon is at x=2, y=10
+Sensor at x=2, y=0: closest beacon is at x=2, y=10
+Sensor at x=0, y=11: closest beacon is at x=2, y=10
+Sensor at x=20, y=14: closest beacon is at x=25, y=17
+Sensor at x=17, y=20: closest beacon is at x=21, y=22
+Sensor at x=16, y=7: closest beacon is at x=15, y=3
+Sensor at x=14, y=3: closest beacon is at x=15, y=3
+Sensor at x=20, y=1: closest beacon is at x=15, y=3
+"""
+```
+
+```elixir
+Day15.part_1(test_input, 10)
+```
+
+```elixir
+input = File.read!("day15_input.txt")
+
+IO.puts(input)
+```
+
+```elixir
+Day15.part_1(input, 2_000_000)
+```
+
+```elixir
+Day15.part_2(test_input, 20)
+```
+
+```elixir
+Day15.part_2(input, 4_000_000)
+```
